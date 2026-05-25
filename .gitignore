@@ -1,0 +1,11 @@
+# Dependencies
+node_modules/
+
+# Production build outputs
+dist/
+dist-ssr/
+*.local
+
+# IDEs and system files
+.DS_Store
+.vscode/
