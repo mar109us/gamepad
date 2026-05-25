@@ -34,12 +34,18 @@ server.on("connection", (clientSocket) => {
 	});
 });
 
+let count = 0;
 function processGamepadButtons(gamepad, clientSocket) {
 	gamepad.buttons.forEach((button, buttonIndex) => {
 		if (!button.pressed) {
-			clientSocket.send("none");
+			count++;
+			if (count >= 50) {
+				clientSocket.send("clear");
+				return;
+			}
 			return;
 		} else {
+			count = 0;
 			clientSocket.send(buttonIndex);
 			console.log(
 				`Gamepad ${gamepad.index} - Button ${buttonIndex} pressed`,
