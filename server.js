@@ -1,45 +1,49 @@
 import { WebSocketServer } from "ws";
 import { installNavigatorShim } from "gamepad-node";
 
+// Initialize the gamepad environment for Node.js
 installNavigatorShim();
 
-const server = new WebSocketServer({ port: 8080 });
-console.log("Starting server on 8080");
+// Configuration Constants
+const PORT = 8080;
+const POLL_INTERVAL_MS = 16; // Roughly 60 frames per second - 16
 
-const lastButtonStates = {};
+const server = new WebSocketServer({ port: PORT });
+console.log(`Gamepad server started on port ${PORT}`);
 
-server.on("connection", (ws) => {
+server.on("connection", (clientSocket) => {
 	console.log("Client connected");
 
-	const interval = setInterval(() => {
-		const gamepads = navigator.getGamepads();
-		let anyControllerConnected = false;
-		for (const gp of gamepads) {
-			if (gp && gp.connected) {
-				anyControllerConnected = true;
-				if (!lastButtonStates[gp.index]) {
-					lastButtonStates[gp.index] = [];
-				}
+	// Core loop to poll gamepads and check for inputs
+	const checkGamepadInputs = () => {
+		const activeGamepads = navigator.getGamepads();
 
-				gp.buttons.forEach((button, index) => {
-					const isPressed = button.pressed;
-					if (isPressed) {
-						console.log(`Gamepad ${gp.index} - Button ${index} pressed`);
-						ws.send(
-							JSON.stringify({ button: index, gamepadIndex: gp.index }),
-						);
-					}
-					lastButtonStates[gp.index][index] = isPressed;
-				});
-			}
+		for (const gamepad of activeGamepads) {
+			if (!gamepad?.connected) continue;
+
+			processGamepadButtons(gamepad, clientSocket);
 		}
+	};
 
-		if (!anyControllerConnected) {
-		}
-	}, 16);
+	const pollingInterval = setInterval(checkGamepadInputs, POLL_INTERVAL_MS);
 
-	ws.on("close", () => {
-		clearInterval(interval);
+	// Cleanup on disconnection
+	clientSocket.on("close", () => {
+		clearInterval(pollingInterval);
 		console.log("Client disconnected");
 	});
 });
+
+function processGamepadButtons(gamepad, clientSocket) {
+	gamepad.buttons.forEach((button, buttonIndex) => {
+		if (button.pressed) {
+			clientSocket.send(buttonIndex);
+		} else {
+			return clientSocket.send("none");
+		}
+
+		console.log(`Gamepad ${gamepad.index} - Button ${buttonIndex} pressed`);
+	});
+}
+
+/* node --watch server.js */
