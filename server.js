@@ -6,18 +6,40 @@ installNavigatorShim();
 const server = new WebSocketServer({ port: 8080 });
 console.log("Starting server on 8080");
 
-// Same API as browsers
-setInterval(() => {
-	const gamepads = navigator.getGamepads();
+const lastButtonStates = {};
 
-	for (const gamepad of gamepads) {
-		if (!gamepad) continue;
+server.on("connection", (ws) => {
+	console.log("Client connected");
 
-		if (gamepad.buttons[0].pressed) {
-			console.log("A button pressed");
+	const interval = setInterval(() => {
+		const gamepads = navigator.getGamepads();
+		let anyControllerConnected = false;
+		for (const gp of gamepads) {
+			if (gp && gp.connected) {
+				anyControllerConnected = true;
+				if (!lastButtonStates[gp.index]) {
+					lastButtonStates[gp.index] = [];
+				}
+
+				gp.buttons.forEach((button, index) => {
+					const isPressed = button.pressed;
+					if (isPressed) {
+						console.log(`Gamepad ${gp.index} - Button ${index} pressed`);
+						ws.send(
+							JSON.stringify({ button: index, gamepadIndex: gp.index }),
+						);
+					}
+					lastButtonStates[gp.index][index] = isPressed;
+				});
+			}
 		}
 
-		const leftStickX = gamepad.axes[0];
-		const leftStickY = gamepad.axes[1];
-	}
-}, 16);
+		if (!anyControllerConnected) {
+		}
+	}, 16);
+
+	ws.on("close", () => {
+		clearInterval(interval);
+		console.log("Client disconnected");
+	});
+});
