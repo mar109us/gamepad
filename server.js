@@ -8,6 +8,8 @@ installNavigatorShim();
 const PORT = 8080;
 const POLL_INTERVAL_MS = 16; // Roughly 60 frames per second - 16
 
+let loopsNoInput = 0;
+
 const server = new WebSocketServer({ port: PORT });
 console.log(`Gamepad server started on port ${PORT}`);
 
@@ -34,24 +36,36 @@ server.on("connection", (clientSocket) => {
 	});
 });
 
-let count = 0;
 function processGamepadButtons(gamepad, clientSocket) {
+	if (gamepad === null) {
+		clientSocket.send("NO-INPUT");
+		return;
+	}
+
 	gamepad.buttons.forEach((button, buttonIndex) => {
 		if (!button.pressed) {
-			count++;
-			if (count >= 50) {
-				clientSocket.send("clear");
-				return;
-			}
+			isInactive(true, clientSocket);
 			return;
 		} else {
-			count = 0;
+			isInactive(false, clientSocket);
 			clientSocket.send(buttonIndex);
 			console.log(
 				`Gamepad ${gamepad.index} - Button ${buttonIndex} pressed`,
 			);
 		}
 	});
+}
+
+function isInactive(buttonPressed, clientSocket) {
+	if (loopsNoInput >= 120) {
+		processGamepadButtons(null, clientSocket);
+	}
+
+	if (buttonPressed) {
+		loopsNoInput++;
+	} else {
+		loopsNoInput = 0;
+	}
 }
 
 /* node --watch server.js */
