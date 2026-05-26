@@ -1,71 +1,65 @@
 import { WebSocketServer } from "ws";
 import { installNavigatorShim } from "gamepad-node";
 
-// Initialize the gamepad environment for Node.js
 installNavigatorShim();
 
-// Configuration Constants
 const PORT = 8080;
-const POLL_INTERVAL_MS = 16; // Roughly 60 frames per second - 16
+const POLL_INTERVAL_MS = 16;
 
-let loopsNoInput = 0;
+const log = {
+	start: console.log(`Started on port ${PORT}`),
+	connect: console.log("Client connected"),
+	disconnect: console.log("Client disconnected"),
+	noController: console.log("No controller connected"),
+};
 
 const server = new WebSocketServer({ port: PORT });
-console.log(`Gamepad server started on port ${PORT}`);
+
+log.start;
 
 server.on("connection", (clientSocket) => {
-	console.log("Client connected");
+	log.connect;
 
-	// Core loop to poll gamepads and check for inputs
 	const checkGamepadInputs = () => {
 		const activeGamepads = navigator.getGamepads();
 
 		for (const gamepad of activeGamepads) {
 			if (!gamepad?.connected) continue;
-
 			processGamepadButtons(gamepad, clientSocket);
+		}
+		if (!activeGamepads) {
+			log.noController;
 		}
 	};
 
 	const pollingInterval = setInterval(checkGamepadInputs, POLL_INTERVAL_MS);
 
-	// Cleanup on disconnection
 	clientSocket.on("close", () => {
 		clearInterval(pollingInterval);
-		console.log("Client disconnected");
+		log.disconnect;
 	});
 });
 
-function processGamepadButtons(gamepad, clientSocket) {
-	if (gamepad === null) {
-		clientSocket.send("NO-INPUT");
-		return;
-	}
+let loopsWithoutInputEvent = 0;
 
+function processGamepadButtons(gamepad, clientSocket) {
 	gamepad.buttons.forEach((button, buttonIndex) => {
-		if (!button.pressed) {
-			isInactive(true, clientSocket);
-			return;
-		} else {
-			isInactive(false, clientSocket);
+		if (button.pressed) {
+			loopsWithoutInputEvent = 0;
 			clientSocket.send(buttonIndex);
-			console.log(
-				`Gamepad ${gamepad.index} - Button ${buttonIndex} pressed`,
-			);
+			console.log(`Controller:${gamepad.index}\tButton:${buttonIndex}`);
+		} else {
+			isInactive(true);
 		}
 	});
-}
 
-function isInactive(buttonPressed, clientSocket) {
-	if (loopsNoInput >= 120) {
-		processGamepadButtons(null, clientSocket);
-	}
+	function isInactive(noInputEvent) {
+		if (noInputEvent) {
+			loopsWithoutInputEvent++;
+		}
 
-	if (buttonPressed) {
-		loopsNoInput++;
-	} else {
-		loopsNoInput = 0;
+		if (loopsWithoutInputEvent >= 190) {
+			clientSocket.send(null);
+		}
 	}
 }
-
-/* node --watch server.js */

@@ -1,0 +1,9 @@
+Start server
+	node server.js
+
+Start server with auto refresh
+	node --watch server.js
+
+
+
+	
